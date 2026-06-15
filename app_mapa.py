@@ -98,16 +98,24 @@ with st.sidebar.expander("Ver lista de sitios afectados"):
         for sitio in no_autorizados_df['CODIGO IDENTIFICADOR']:
             st.markdown(f"<div style='background:#f9f0ff; border-left:4px solid purple; padding:5px; margin-bottom:3px; font-size:12px;'>{sitio}</div>", unsafe_allow_html=True)
 
-# --- MAPA ---
-mapa = folium.Map(location=[df_procesado['LATITUD_MAPA'].mean(), df_procesado['LONGITUD_MAPA'].mean()], zoom_start=8, tiles="OpenStreetMap")
+# --- MAPA (AJUSTADO PARA CENTRADO DINÁMICO) ---
+if seleccion == "TODOS":
+    centro = [df_procesado['LATITUD_MAPA'].mean(), df_procesado['LONGITUD_MAPA'].mean()]
+    zoom = 8
+else:
+    fila_seleccionada = df_procesado[df_procesado['CODIGO IDENTIFICADOR'].astype(str) == seleccion].iloc[0]
+    centro = [fila_seleccionada['LATITUD_MAPA'], fila_seleccionada['LONGITUD_MAPA']]
+    zoom = 16
+
+mapa = folium.Map(location=centro, zoom_start=zoom, tiles="OpenStreetMap")
 marker_cluster = MarkerCluster().add_to(mapa)
 
 for _, fila in df_procesado.iterrows():
-    # Incluimos TODAS las columnas en el popup
+    # Popups con TODAS las columnas
     tabla_html = "".join([f"<tr><td style='padding:2px; font-weight:bold;'>{col}:</td><td style='padding:2px;'>{fila[col]}</td></tr>" for col in df_procesado.columns if col not in ['LATITUD_MAPA', 'LONGITUD_MAPA', 'FECHA_TEMP']])
     html_popup = f"<div style='width:250px; font-size:11px;'><h4>{fila['CODIGO IDENTIFICADOR']}</h4><hr><table>{tabla_html}</table></div>"
     
-    color = 'red' if fila['CODIGO IDENTIFICADOR'] == seleccion else 'blue'
+    color = 'red' if str(fila['CODIGO IDENTIFICADOR']) == seleccion else 'blue'
     folium.Marker([fila['LATITUD_MAPA'], fila['LONGITUD_MAPA']], 
                   popup=folium.Popup(html_popup, max_width=300),
                   icon=folium.Icon(color=color)).add_to(marker_cluster)
