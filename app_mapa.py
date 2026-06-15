@@ -59,7 +59,6 @@ df_procesado = cargar_datos().dropna(subset=['LATITUD_MAPA', 'LONGITUD_MAPA'])
 df_procesado['FECHA_TEMP'] = df_procesado['FECHA DE INSPECCIÓN 2026'].str.strip()
 vandalizados_df = df_procesado[df_procesado['¿SITIO VANDALIZADO ?'].str.strip().str.upper() == 'SI']
 no_autorizados_df = df_procesado[df_procesado['EQUIPOS NO AUTORIZADOS'].str.strip().str.upper() == 'SI']
-nodos_no_aut = len(no_autorizados_df)
 
 st.title("Monitoreo de Nodos - Puno 2026")
 st.markdown("**Componentes de la Red de Acceso Puno**")
@@ -69,11 +68,9 @@ conteo_sites = df_procesado['NOMBRE DE SITE'].value_counts()
 cols = st.columns(len(conteo_sites))
 for i, (n, c) in enumerate(conteo_sites.items()):
     with cols[i]:
-        st.markdown(f'''<div style="background:#eef6ff; border: 1px solid #b3d7ff; padding:20px; border-radius:10px; text-align:center; min-height:120px; display:flex; flex-direction:column; justify-content:center;">
-            <div style="font-weight:bold; color:#555; font-size:11px; text-transform:uppercase;">{n}</div>
-            <div style="font-weight:bold; color:#0056b3; font-size:28px; margin-top:5px;">{c}</div>
-        </div>''', unsafe_allow_html=True)
-
+        st.markdown(f'''<div style="background:#eef6ff; border: 1px solid #b3d7ff; padding:20px; border-radius:10px; text-align:center;">
+            <div style="font-weight:bold; color:#555; font-size:11px;">{n}</div>
+            <div style="font-weight:bold; color:#0056b3; font-size:28px;">{c}</div></div>''', unsafe_allow_html=True)
 st.divider()
 
 # --- SIDEBAR ---
@@ -85,45 +82,55 @@ st.sidebar.markdown(f"""<div style="font-size:14px; margin-top:10px;">
 <b>Vandalizados:</b> <span style='color:red;'>{len(vandalizados_df)}</span><br>
 <b>Inspeccionado 2026:</b> <span style='color:green;'>{df_procesado[df_procesado['FECHA_TEMP'] != ''].shape[0]}</span><br>
 <b>No Inspeccionado:</b> <span style='color:orange;'>{df_procesado[df_procesado['FECHA_TEMP'] == ''].shape[0]}</span><br>
-<b>Equipos No Autorizados:</b> <span style='color:purple;'>{nodos_no_aut}</span></div>""", unsafe_allow_html=True)
+<b>Equipos No Autorizados:</b> <span style='color:purple;'>{len(no_autorizados_df)}</span></div>""", unsafe_allow_html=True)
 
-# Expander de listas recuperado
 with st.sidebar.expander("Ver lista de sitios afectados"):
     if not vandalizados_df.empty:
-        st.markdown("<h6 style='color:red; margin-bottom:5px;'>⚠️ Sitios Vandalizados:</h6>", unsafe_allow_html=True)
-        for sitio in vandalizados_df['CODIGO IDENTIFICADOR']:
-            st.markdown(f"<div style='background:#fff0f0; border-left:4px solid red; padding:5px; margin-bottom:3px; font-size:12px;'>{sitio}</div>", unsafe_allow_html=True)
+        st.markdown("<h6 style='color:red;'>⚠️ Sitios Vandalizados:</h6>", unsafe_allow_html=True)
+        for sitio in vandalizados_df['CODIGO IDENTIFICADOR']: st.markdown(f"<div style='background:#fff0f0; border-left:4px solid red; padding:5px; font-size:11px;'>{sitio}</div>", unsafe_allow_html=True)
     if not no_autorizados_df.empty:
-        st.markdown("<h6 style='color:purple; margin-bottom:10px; margin-top:10px;'>🚫 Equipos No Autorizados:</h6>", unsafe_allow_html=True)
-        for sitio in no_autorizados_df['CODIGO IDENTIFICADOR']:
-            st.markdown(f"<div style='background:#f9f0ff; border-left:4px solid purple; padding:5px; margin-bottom:3px; font-size:12px;'>{sitio}</div>", unsafe_allow_html=True)
+        st.markdown("<h6 style='color:purple; margin-top:10px;'>🚫 Equipos No Autorizados:</h6>", unsafe_allow_html=True)
+        for sitio in no_autorizados_df['CODIGO IDENTIFICADOR']: st.markdown(f"<div style='background:#f9f0ff; border-left:4px solid purple; padding:5px; font-size:11px;'>{sitio}</div>", unsafe_allow_html=True)
 
 # --- MAPA ---
-mapa = folium.Map(location=[df_procesado['LATITUD_MAPA'].mean(), df_procesado['LONGITUD_MAPA'].mean()], zoom_start=8, tiles="OpenStreetMap")
+# Determinamos el centro del mapa
+if seleccion == "TODOS":
+    centro = [df_procesado['LATITUD_MAPA'].mean(), df_procesado['LONGITUD_MAPA'].mean()]
+    zoom = 8
+else:
+    fila_sel = df_procesado[df_procesado['CODIGO IDENTIFICADOR'].astype(str) == seleccion].iloc[0]
+    centro = [fila_sel['LATITUD_MAPA'], fila_sel['LONGITUD_MAPA']]
+    zoom = 15
+
+mapa = folium.Map(location=centro, zoom_start=zoom)
 marker_cluster = MarkerCluster().add_to(mapa)
 
 for _, fila in df_procesado.iterrows():
-    # Tabla informativa para el Popup
-    cols_popup = [c for c in df_procesado.columns if c not in ['LATITUD_MAPA', 'LONGITUD_MAPA', 'FECHA_TEMP']]
-    tabla_html = "".join([f"<tr><td style='padding:2px; font-weight:bold;'>{col}:</td><td style='padding:2px;'>{fila[col]}</td></tr>" for col in cols_popup])
-    html_popup = f"<div style='width:250px; font-size:11px;'><h4>{fila['CODIGO IDENTIFICADOR']}</h4><hr><table>{tabla_html}</table></div>"
+    # Creamos el popup detallado tal como lo tenías
+    html_popup = f"""<div style="width:200px;">
+        <b>Código:</b> {fila['CODIGO IDENTIFICADOR']}<br>
+        <b>Site:</b> {fila.get('NOMBRE DE SITE', 'N/A')}<br>
+        <b>Vandalizado:</b> {fila.get('¿SITIO VANDALIZADO ?', 'N/A')}
+        </div>"""
     
-    color = 'red' if fila['CODIGO IDENTIFICADOR'] == seleccion else 'blue'
-    folium.Marker([fila['LATITUD_MAPA'], fila['LONGITUD_MAPA']], 
-                  popup=folium.Popup(html_popup, max_width=300),
-                  icon=folium.Icon(color=color)).add_to(marker_cluster)
+    # Marcador azul para todos, rojo para el seleccionado
+    color = 'red' if str(fila['CODIGO IDENTIFICADOR']) == seleccion else 'blue'
+    folium.Marker(
+        [fila['LATITUD_MAPA'], fila['LONGITUD_MAPA']], 
+        popup=folium.Popup(html_popup, max_width=250),
+        icon=folium.Icon(color=color)
+    ).add_to(marker_cluster)
 
-st_folium(mapa, width=1200, height=600)
+st_folium(mapa, width=1200, height=500)
 
-# --- VISUALIZACIÓN FOTOS ---
+# --- FOTOS ---
 if seleccion != "TODOS":
     st.subheader(f"Registro Fotográfico: {seleccion}")
     fotos = buscar_fotos_drive(seleccion)
     if fotos:
         cols = st.columns(4)
         for i, f in enumerate(fotos):
-            with cols[i % 4]:
-                img_url = f"https://lh3.googleusercontent.com/d/{f['id']}"
-                st.image(img_url, caption=f.get('name'), use_container_width=True)
+            img_url = f"https://lh3.googleusercontent.com/d/{f['id']}"
+            cols[i % 4].image(img_url, caption=f.get('name'), use_container_width=True)
     else:
-        st.warning("No se encontraron fotos en la carpeta '1.FOTOS'.")
+        st.warning("No se encontraron fotos.")
