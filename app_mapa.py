@@ -38,6 +38,7 @@ def buscar_fotos_drive(codigo_sitio):
         files_fotos = res_fotos.get('files', [])
         if not files_fotos: return []
         id_fotos = files_fotos[0]['id']
+        # Traemos webContentLink para la visualización correcta
         q_imgs = f"'{id_fotos}' in parents and mimeType contains 'image/' and trashed = false"
         res_imgs = service.files().list(q=q_imgs, fields='files(id, name, webContentLink)').execute()
         return res_imgs.get('files', [])
@@ -64,7 +65,7 @@ no_autorizados_df = df_procesado[df_procesado['EQUIPOS NO AUTORIZADOS'].str.stri
 st.title("Monitoreo de Nodos - Puno 2026")
 st.markdown("**Componentes de la Red de Acceso Puno**")
 
-# --- CONTADORES INICIALES ---
+# --- CONTADORES ---
 conteo_sites = df_procesado['NOMBRE DE SITE'].value_counts()
 cols = st.columns(len(conteo_sites))
 for i, (n, c) in enumerate(conteo_sites.items()):
@@ -95,7 +96,9 @@ with st.sidebar.expander("Ver lista de sitios afectados"):
 
 # --- MAPA ---
 df_mostrar = df_procesado if seleccion == "TODOS" else df_procesado[df_procesado['CODIGO IDENTIFICADOR'].astype(str) == seleccion]
-mapa = folium.Map(location=[df_mostrar['LATITUD_MAPA'].mean(), df_mostrar['LONGITUD_MAPA'].mean()], zoom_start=8 if seleccion == "TODOS" else 15)
+lat_m = df_mostrar['LATITUD_MAPA'].mean()
+lon_m = df_mostrar['LONGITUD_MAPA'].mean()
+mapa = folium.Map(location=[lat_m, lon_m], zoom_start=8 if seleccion == "TODOS" else 15)
 marker_cluster = MarkerCluster().add_to(mapa)
 for _, fila in df_mostrar.iterrows():
     folium.Marker([fila['LATITUD_MAPA'], fila['LONGITUD_MAPA']], popup=fila['CODIGO IDENTIFICADOR']).add_to(marker_cluster)
@@ -108,7 +111,8 @@ if seleccion != "TODOS":
     if fotos:
         cols = st.columns(4)
         for i, f in enumerate(fotos):
-            if 'webContentLink' in f:
-                cols[i % 4].image(f['webContentLink'], caption=f.get('name'), use_container_width=True)
+            link = f.get('webContentLink')
+            if link:
+                cols[i % 4].image(link, caption=f.get('name'), use_container_width=True)
     else:
-        st.warning("No se encontraron fotos. Verifica permisos de la carpeta '1.FOTOS'.")
+        st.warning("No se encontraron fotos. Asegúrate de dar acceso de 'Lector' a la carpeta '1.FOTOS' para el correo del servicio.")
